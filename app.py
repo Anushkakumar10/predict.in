@@ -39,6 +39,13 @@ def filedownload(df, filename):
     href = f'<a href="data:file/csv;base64,{b64}" download={filename}>Download {filename} File</a>'
     return href
 
+def remove_columns(df, columns_to_remove):
+    columns=list(df.columns)
+    for col in columns_to_remove:
+        columns.remove(col)
+    df = df.loc[:, columns]
+    return df
+
 st.write('''
 # predict.in
 
@@ -70,6 +77,11 @@ if uploaded_file is not None:
         #split_size = st.sidebar.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
         #seed_number = st.sidebar.slider('Set the random seed number', 1, 100, 42, 1)
 
+        columns_to_remove = st.sidebar.multiselect('Select columns to remove', df.columns)
+
+        if st.sidebar.button('Remove selected columns'):
+            df = remove_columns(df, columns_to_remove)
+
     try:
         st.header('**Input DataFrame**')
         st.write(df)
@@ -84,6 +96,8 @@ if uploaded_file is not None:
 
     if st.checkbox('Genrate EDA'):
         eda(df)
+
+
     print('''if st.checkbox('Build models'):
         predictions_train, predictions_test = build_model(X, Y, split_size, seed_number)
 
