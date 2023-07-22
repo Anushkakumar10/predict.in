@@ -11,6 +11,9 @@ from streamlit_pandas_profiling import st_profile_report
 
 st.set_page_config(page_title='predict.in', layout='wide', initial_sidebar_state='expanded')
 
+#### Session States ####
+if 'columns_to_remove' not in st.session_state:
+    st.session_state['columns_to_remove'] = []
 
 def create_x_y(df, target):
     columns = list(df.columns)
@@ -59,6 +62,7 @@ with st.sidebar.header('Upload your data'):
 if uploaded_file is not None:
     def load_csv():
         df = pd.read_csv(uploaded_file)
+        df = remove_columns(df, st.session_state['columns_to_remove'])
         return df
 
 
@@ -77,19 +81,27 @@ if uploaded_file is not None:
         #split_size = st.sidebar.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
         #seed_number = st.sidebar.slider('Set the random seed number', 1, 100, 42, 1)
 
-        columns_to_remove = st.sidebar.multiselect('Select columns to remove', df.columns)
+        def on_columns_to_remove_change():
+            st.session_state['columns_to_remove'] = columns_to_remove
+        columns_to_remove = st.sidebar.multiselect('Select columns to remove',
+                                                   df.columns,
+                                                   on_change=on_columns_to_remove_change)
 
         if st.sidebar.button('Remove selected columns'):
             df = remove_columns(df, columns_to_remove)
 
     try:
         st.header('**Input DataFrame**')
-        st.write(df)
-        st.write('**Dataset dimension**')
-        st.write(f'X [Shape: {X.shape}]')
-        st.write(X)
-        st.write(f'Y [Shape: {Y.shape}]')
-        st.write(Y)
+        if target is None:
+            st.write(df)
+        else:
+            col1, col2 = st.columns([4, 1])
+            col1.write('X')
+            col1.write(X)
+            col1.write(X.shape)
+            col2.write('Y')
+            col2.write(Y)
+            col2.write(Y.shape)
     except NameError:
         st.warning('Target variable not defined.')
 
