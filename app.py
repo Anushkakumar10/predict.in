@@ -12,8 +12,17 @@ from streamlit_pandas_profiling import st_profile_report
 st.set_page_config(page_title='predict.in', layout='wide', initial_sidebar_state='expanded')
 
 #### Session States ####
+if 'df_uploaded' not in st.session_state:
+    st.session_state['df_uploaded'] = 'no'  ## ['yes', 'changed', 'no']
+if 'df_columns' not in st.session_state:
+    st.session_state['df_columns'] = []
+if 'required_df_columns' not in st.session_state:
+    st.session_state['required_df_columns'] = []
 if 'columns_to_remove' not in st.session_state:
     st.session_state['columns_to_remove'] = []
+if 'columns_to_add_back' not in st.session_state:
+    st.session_state['columns_to_add_back'] = []
+
 
 def create_x_y(df, target):
     columns = list(df.columns)
@@ -23,11 +32,13 @@ def create_x_y(df, target):
     Y = df.loc[:, target]  # Selecting the target column as Y
     return X, Y
 
+
 def eda(df):
     pr = ProfileReport(df, explorative=True)
     st.write('---')
     st.header('**Pandas Profiling Report**')
     st_profile_report(pr)
+
 
 def build_model(X, Y, split_size, seed_number):
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=split_size, random_state=seed_number)
@@ -36,18 +47,36 @@ def build_model(X, Y, split_size, seed_number):
     models_test, predictions_test = reg.fit(X_train, X_test, Y_train, Y_test)
     return predictions_train, predictions_test
 
+
 def filedownload(df, filename):
     csv = df.to_csv(index=False)
     b64 = base64.b64encode(csv.encode()).decode()  # strings <-> bytes conversions
     href = f'<a href="data:file/csv;base64,{b64}" download={filename}>Download {filename} File</a>'
     return href
 
-def remove_columns(df, columns_to_remove):
-    columns=list(df.columns)
+
+## Returns the df columns after removing the columns in columns_to_remove
+def remove_columns(columns_to_remove):
+    columns = st.session_state['df_columns']
     for col in columns_to_remove:
         columns.remove(col)
-    df = df.loc[:, columns]
-    return df
+    return columns
+
+
+## Returns the df columns after adding back the columns from columns_to_add_back
+def add_back_columns(columns_to_add_back):
+    updated_columns_to_remove = [x for x in st.session_state['columns_to_remove'] if x not in columns_to_add_back]
+    st.session_state['columns_to_remove'] = updated_columns_to_remove
+    columns = remove_columns(updated_columns_to_remove)
+    return columns
+
+
+## Printing session states
+print('1', st.session_state['df_uploaded'])
+print('2', st.session_state['df_columns'])
+print('3', st.session_state['required_df_columns'])
+print('4', st.session_state['columns_to_remove'])
+print('5', st.session_state['columns_to_add_back'])
 
 st.write('''
 # predict.in
@@ -55,43 +84,74 @@ st.write('''
 Get to know your dataset!
 ''')
 
-# Upload CSV data
-with st.sidebar.header('Upload your data'):
-    uploaded_file = st.sidebar.file_uploader("Upload your input CSV file", type=["csv"])
 
-if uploaded_file is not None:
+# Upload CSV data
+def on_uploaded_file_change():
+    st.session_state['df_uploaded'] = 'no'
+
+
+with st.sidebar.header('Upload your data'):
+    uploaded_file = st.sidebar.file_uploader("Upload your input CSV file",
+                                             type=["csv"],
+                                             on_change=on_uploaded_file_change)
+
+if uploaded_file is None:
+    st.info('Awaiting for CSV file to be uploaded.')
+else:
     def load_csv():
         df = pd.read_csv(uploaded_file)
-        df = remove_columns(df, st.session_state['columns_to_remove'])
+        if st.session_state['df_uploaded'] == 'no':
+            st.session_state['df_columns'] = list(df.columns)
+            st.session_state['required_df_columns'] = remove_columns(st.session_state['columns_to_remove'])
+            st.session_state['df_uploaded'] = 'yes'
         return df
 
 
     df = load_csv()
-    df_columns = [None, ] + list(df.columns)
 
     with st.sidebar.header('Set Parameters'):
-        index = st.sidebar.selectbox('Select index column', df_columns)
+        index = st.sidebar.selectbox('Select index column',
+                                     [None, ] + st.session_state['df_columns'])
         if index is not None:
+            st.session_state['required_df_columns'] = remove_columns([index])
             df = df.set_index(index)
 
-        target = st.sidebar.selectbox('Select target column', df_columns)
-        if target is not None:
-            X, Y = create_x_y(df, target)
+        target = st.sidebar.selectbox('Select target column',
+                                      [None, ] + st.session_state['required_df_columns'])
 
-        #split_size = st.sidebar.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
-        #seed_number = st.sidebar.slider('Set the random seed number', 1, 100, 42, 1)
+
+        # split_size = st.sidebar.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
+        # seed_number = st.sidebar.slider('Set the random seed number', 1, 100, 42, 1)
 
         def on_columns_to_remove_change():
             st.session_state['columns_to_remove'] = columns_to_remove
+
+
         columns_to_remove = st.sidebar.multiselect('Select columns to remove',
-                                                   df.columns,
+                                                   st.session_state['required_df_columns'],
                                                    on_change=on_columns_to_remove_change)
-
         if st.sidebar.button('Remove selected columns'):
-            df = remove_columns(df, columns_to_remove)
+            st.session_state['required_df_columns'] = remove_columns(columns_to_remove)
 
+        if len(st.session_state['columns_to_remove']) != 0:
+            def on_columns_to_add_back_change():
+                st.session_state['columns_to_add_back'] = columns_to_add_back
+
+
+            columns_to_add_back = st.sidebar.multiselect('Select columns to add back',
+                                                         st.session_state['columns_to_remove'],
+                                                         on_change=on_columns_to_add_back_change)
+            if st.sidebar.button('Add back selected columns'):
+                st.session_state['required_df_columns'] = add_back_columns(columns_to_add_back)
+    ## df after setting parameters
+    df = df.loc[:, st.session_state['required_df_columns']]
     try:
         st.header('**Input DataFrame**')
+        if target != index:
+            if target is not None:
+                X, Y = create_x_y(df, target)
+        else:
+            st.warning("Index and Target columns can't be same.")
         if target is None:
             st.write(df)
         else:
@@ -105,12 +165,13 @@ if uploaded_file is not None:
     except NameError:
         st.warning('Target variable not defined.')
 
-
     if st.checkbox('Genrate EDA'):
         eda(df)
 
-
-    print('''if st.checkbox('Build models'):
+    st.markdown(''' # Work in Progress
+    
+        if st.checkbox('Build models'):
+        
         predictions_train, predictions_test = build_model(X, Y, split_size, seed_number)
 
         st.subheader('Table of Model Performance')
@@ -121,7 +182,5 @@ if uploaded_file is not None:
 
         st.write('Test set')
         st.write(predictions_test)
-        st.markdown(filedownload(predictions_test, 'test.csv'), unsafe_allow_html=True)''')
-
-else:
-    st.info('Awaiting for CSV file to be uploaded.')
+        st.markdown(filedownload(predictions_test, 'test.csv'), unsafe_allow_html=True)
+    ''')
