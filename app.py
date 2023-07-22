@@ -18,6 +18,10 @@ if 'df_columns' not in st.session_state:
     st.session_state['df_columns'] = []
 if 'required_df_columns' not in st.session_state:
     st.session_state['required_df_columns'] = []
+if 'df_index' not in st.session_state:
+    st.session_state['df_index'] = None
+if 'df_target' not in st.session_state:
+    st.session_state['df_target'] = None
 if 'columns_to_remove' not in st.session_state:
     st.session_state['columns_to_remove'] = []
 if 'columns_to_add_back' not in st.session_state:
@@ -25,7 +29,7 @@ if 'columns_to_add_back' not in st.session_state:
 
 
 def create_x_y(df, target):
-    columns = list(df.columns)
+    columns = st.session_state['required_df_columns'].copy()
     x_columns = columns
     x_columns.remove(target)
     X = df.loc[:, x_columns]  # Using all column except target column as X
@@ -57,7 +61,7 @@ def filedownload(df, filename):
 
 ## Returns the df columns after removing the columns in columns_to_remove
 def remove_columns(columns_to_remove):
-    columns = st.session_state['df_columns']
+    columns = st.session_state['df_columns'].copy()
     for col in columns_to_remove:
         columns.remove(col)
     return columns
@@ -66,8 +70,9 @@ def remove_columns(columns_to_remove):
 ## Returns the df columns after adding back the columns from columns_to_add_back
 def add_back_columns(columns_to_add_back):
     updated_columns_to_remove = [x for x in st.session_state['columns_to_remove'] if x not in columns_to_add_back]
-    st.session_state['columns_to_remove'] = updated_columns_to_remove
-    columns = remove_columns(updated_columns_to_remove)
+    st.session_state['columns_to_remove'] = updated_columns_to_remove.copy()
+    columns = remove_columns(updated_columns_to_remove).copy()
+    st.session_state['columns_to_add_back'] = []
     return columns
 
 
@@ -75,8 +80,10 @@ def add_back_columns(columns_to_add_back):
 print('1', st.session_state['df_uploaded'])
 print('2', st.session_state['df_columns'])
 print('3', st.session_state['required_df_columns'])
-print('4', st.session_state['columns_to_remove'])
-print('5', st.session_state['columns_to_add_back'])
+print('4', st.session_state['df_index'])
+print('5', st.session_state['df_target'])
+print('6', st.session_state['columns_to_remove'])
+print('7', st.session_state['columns_to_add_back'])
 
 st.write('''
 # predict.in
@@ -101,8 +108,8 @@ else:
     def load_csv():
         df = pd.read_csv(uploaded_file)
         if st.session_state['df_uploaded'] == 'no':
-            st.session_state['df_columns'] = list(df.columns)
-            st.session_state['required_df_columns'] = remove_columns(st.session_state['columns_to_remove'])
+            st.session_state['df_columns'] = list(df.columns).copy()
+            st.session_state['required_df_columns'] = list(df.columns).copy()
             st.session_state['df_uploaded'] = 'yes'
         return df
 
@@ -113,36 +120,42 @@ else:
         index = st.sidebar.selectbox('Select index column',
                                      [None, ] + st.session_state['df_columns'])
         if index is not None:
-            st.session_state['required_df_columns'] = remove_columns([index])
-            df = df.set_index(index)
+            if index in st.session_state['required_df_columns']:
+                st.session_state['columns_to_remove'].extend([index])
+                st.session_state['required_df_columns'] = remove_columns([index]).copy()
+                df = df.set_index(index)
+                if st.session_state['df_index'] is not None:
+                    st.session_state['required_df_columns'] = add_back_columns([index]).copy()
+                st.session_state['df_index'] = index
+
+
 
         target = st.sidebar.selectbox('Select target column',
                                       [None, ] + st.session_state['required_df_columns'])
-
-
-        # split_size = st.sidebar.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
-        # seed_number = st.sidebar.slider('Set the random seed number', 1, 100, 42, 1)
-
-        def on_columns_to_remove_change():
-            st.session_state['columns_to_remove'] = columns_to_remove
-
+        if target is None:
+            if st.session_state['df_target'] is not None:
+                target=st.session_state['df_target']
+        elif target is not None:
+            st.session_state['df_target'] = target
 
         columns_to_remove = st.sidebar.multiselect('Select columns to remove',
-                                                   st.session_state['required_df_columns'],
-                                                   on_change=on_columns_to_remove_change)
+                                                   st.session_state['required_df_columns'])
+
         if st.sidebar.button('Remove selected columns'):
-            st.session_state['required_df_columns'] = remove_columns(columns_to_remove)
+            st.session_state['columns_to_remove'].extend(columns_to_remove)
+            st.session_state['required_df_columns'] = remove_columns(st.session_state['columns_to_remove']).copy()
+
 
         if len(st.session_state['columns_to_remove']) != 0:
-            def on_columns_to_add_back_change():
-                st.session_state['columns_to_add_back'] = columns_to_add_back
-
-
             columns_to_add_back = st.sidebar.multiselect('Select columns to add back',
-                                                         st.session_state['columns_to_remove'],
-                                                         on_change=on_columns_to_add_back_change)
+                                                         st.session_state['columns_to_remove'])
+
             if st.sidebar.button('Add back selected columns'):
-                st.session_state['required_df_columns'] = add_back_columns(columns_to_add_back)
+                st.session_state['columns_to_add_back'].extend(columns_to_add_back)
+                st.session_state['required_df_columns'] = add_back_columns(columns_to_add_back).copy()
+
+        split_size = st.sidebar.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
+        seed_number = st.sidebar.slider('Set the random seed number', 1, 100, 42, 1)
     ## df after setting parameters
     df = df.loc[:, st.session_state['required_df_columns']]
     try:
