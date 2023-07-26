@@ -58,12 +58,73 @@ def eda(df):
     return pr
 
 
-def build_model(X, Y):
+def build_model(X, Y, split_size, seed_number):
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=split_size, random_state=seed_number)
     reg = LazyRegressor(verbose=0, ignore_warnings=False, custom_metric=None)
     models_train, predictions_train = reg.fit(X_train, X_train, Y_train, Y_train)
     models_test, predictions_test = reg.fit(X_train, X_test, Y_train, Y_test)
     return predictions_train, predictions_test
+
+
+def plot_model_details(predictions_train, predictions_test):
+    st.subheader('Table of Model Performance')
+
+    st.write('Training set')
+    st.write(predictions_train)
+    st.markdown(filedownload(predictions_train, 'training.csv'), unsafe_allow_html=True)
+
+    st.write('Test set')
+    st.write(predictions_test)
+    st.markdown(filedownload(predictions_test, 'test.csv'), unsafe_allow_html=True)
+
+    st.subheader('3. Plot of Model Performance (Test set)')
+
+    with st.markdown('**R-squared**'):
+        # Tall
+        predictions_test["R-Squared"] = [0 if i < 0 else i for i in predictions_test["R-Squared"]]
+        plt.figure(figsize=(3, 9))
+        sns.set_theme(style="whitegrid")
+        ax1 = sns.barplot(y=predictions_test.index, x="R-Squared", data=predictions_test)
+        ax1.set(xlim=(0, 1))
+    st.markdown(imagedownload(plt, 'plot-r2-tall.pdf'), unsafe_allow_html=True)
+    # Wide
+    plt.figure(figsize=(9, 3))
+    sns.set_theme(style="whitegrid")
+    ax1 = sns.barplot(x=predictions_test.index, y="R-Squared", data=predictions_test)
+    ax1.set(ylim=(0, 1))
+    plt.xticks(rotation=90)
+    st.pyplot(plt)
+    st.markdown(imagedownload(plt, 'plot-r2-wide.pdf'), unsafe_allow_html=True)
+
+    with st.markdown('**RMSE (capped at 50)**'):
+        # Tall
+        predictions_test["RMSE"] = [50 if i > 50 else i for i in predictions_test["RMSE"]]
+        plt.figure(figsize=(3, 9))
+        sns.set_theme(style="whitegrid")
+        ax2 = sns.barplot(y=predictions_test.index, x="RMSE", data=predictions_test)
+    st.markdown(imagedownload(plt, 'plot-rmse-tall.pdf'), unsafe_allow_html=True)
+    # Wide
+    plt.figure(figsize=(9, 3))
+    sns.set_theme(style="whitegrid")
+    ax2 = sns.barplot(x=predictions_test.index, y="RMSE", data=predictions_test)
+    plt.xticks(rotation=90)
+    st.pyplot(plt)
+    st.markdown(imagedownload(plt, 'plot-rmse-wide.pdf'), unsafe_allow_html=True)
+
+    with st.markdown('**Calculation time**'):
+        # Tall
+        predictions_test["Time Taken"] = [0 if i < 0 else i for i in predictions_test["Time Taken"]]
+        plt.figure(figsize=(3, 9))
+        sns.set_theme(style="whitegrid")
+        ax3 = sns.barplot(y=predictions_test.index, x="Time Taken", data=predictions_test)
+    st.markdown(imagedownload(plt, 'plot-calculation-time-tall.pdf'), unsafe_allow_html=True)
+    # Wide
+    plt.figure(figsize=(9, 3))
+    sns.set_theme(style="whitegrid")
+    ax3 = sns.barplot(x=predictions_test.index, y="Time Taken", data=predictions_test)
+    plt.xticks(rotation=90)
+    st.pyplot(plt)
+    st.markdown(imagedownload(plt, 'plot-calculation-time-wide.pdf'), unsafe_allow_html=True)
 
 
 def filedownload(df, filename):
@@ -250,83 +311,23 @@ else:
         with st.expander('''Alerts'''):
             alerts_list = desc.alerts
             for i, item in enumerate(alerts_list):
-                print(type(item))
-                temp = str(item)
-                st.markdown(f"- {temp}")
-
-                if item.alert_type_name == 'Missing':
+                if item.alert_type_name in {'Missing', 'Zeros'}:
+                    st.markdown(f"- {item}")
                     if st.checkbox(f'Fix {item.column_name} column'):
                         if st.button('Delete entire column'):
-                            pass
+                            st.write(f'Deleted {item.column_name}')
                         if st.button('Delete rows where values are missing'):
-                            pass
+                            st.write(f'Deleted rows with missing values in {item.column_name} column')
                         if st.button('Fill missing values'):
                             if st.button('Fill with mean value'):
-                                pass
+                                st.write(f'Filled missing values in {item.column_name} with its mean value{23}')
                             if st.button('Fill with median value'):
-                                pass
-                    st.warning('Column with missing value found.')
+                                st.write(f'Filled missing values in {item.column_name} with its median value{21}')
+                    else:
+                        st.warning('Column with missing value found.')
 
     st.write('---')
 
     if st.checkbox('Build models'):
-        predictions_train, predictions_test = build_model(X, Y)
-
-        st.subheader('Table of Model Performance')
-
-        st.write('Training set')
-        st.write(predictions_train)
-        st.markdown(filedownload(predictions_train, 'training.csv'), unsafe_allow_html=True)
-
-        st.write('Test set')
-        st.write(predictions_test)
-        st.markdown(filedownload(predictions_test, 'test.csv'), unsafe_allow_html=True)
-
-        st.subheader('3. Plot of Model Performance (Test set)')
-
-        with st.markdown('**R-squared**'):
-            # Tall
-            predictions_test["R-Squared"] = [0 if i < 0 else i for i in predictions_test["R-Squared"]]
-            plt.figure(figsize=(3, 9))
-            sns.set_theme(style="whitegrid")
-            ax1 = sns.barplot(y=predictions_test.index, x="R-Squared", data=predictions_test)
-            ax1.set(xlim=(0, 1))
-        st.markdown(imagedownload(plt, 'plot-r2-tall.pdf'), unsafe_allow_html=True)
-        # Wide
-        plt.figure(figsize=(9, 3))
-        sns.set_theme(style="whitegrid")
-        ax1 = sns.barplot(x=predictions_test.index, y="R-Squared", data=predictions_test)
-        ax1.set(ylim=(0, 1))
-        plt.xticks(rotation=90)
-        st.pyplot(plt)
-        st.markdown(imagedownload(plt, 'plot-r2-wide.pdf'), unsafe_allow_html=True)
-
-        with st.markdown('**RMSE (capped at 50)**'):
-            # Tall
-            predictions_test["RMSE"] = [50 if i > 50 else i for i in predictions_test["RMSE"]]
-            plt.figure(figsize=(3, 9))
-            sns.set_theme(style="whitegrid")
-            ax2 = sns.barplot(y=predictions_test.index, x="RMSE", data=predictions_test)
-        st.markdown(imagedownload(plt, 'plot-rmse-tall.pdf'), unsafe_allow_html=True)
-        # Wide
-        plt.figure(figsize=(9, 3))
-        sns.set_theme(style="whitegrid")
-        ax2 = sns.barplot(x=predictions_test.index, y="RMSE", data=predictions_test)
-        plt.xticks(rotation=90)
-        st.pyplot(plt)
-        st.markdown(imagedownload(plt, 'plot-rmse-wide.pdf'), unsafe_allow_html=True)
-
-        with st.markdown('**Calculation time**'):
-            # Tall
-            predictions_test["Time Taken"] = [0 if i < 0 else i for i in predictions_test["Time Taken"]]
-            plt.figure(figsize=(3, 9))
-            sns.set_theme(style="whitegrid")
-            ax3 = sns.barplot(y=predictions_test.index, x="Time Taken", data=predictions_test)
-        st.markdown(imagedownload(plt, 'plot-calculation-time-tall.pdf'), unsafe_allow_html=True)
-        # Wide
-        plt.figure(figsize=(9, 3))
-        sns.set_theme(style="whitegrid")
-        ax3 = sns.barplot(x=predictions_test.index, y="Time Taken", data=predictions_test)
-        plt.xticks(rotation=90)
-        st.pyplot(plt)
-        st.markdown(imagedownload(plt, 'plot-calculation-time-wide.pdf'), unsafe_allow_html=True)
+        predictions_train, predictions_test = build_model(X, Y, split_size, seed_number)
+        plot_model_details(predictions_train, predictions_test)
