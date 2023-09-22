@@ -10,7 +10,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from ydata_profiling import ProfileReport
-from ydata_profiling.model import alerts
 from streamlit_pandas_profiling import st_profile_report
 
 st.set_page_config(page_title='predict.in',
@@ -53,8 +52,8 @@ def create_x_y(df, target):
 
 
 @st.cache_resource
-def eda(df):
-    pr = ProfileReport(df, explorative=True)
+def eda(df, explorative, mininmal):
+    pr = ProfileReport(df, explorative=explorative, minimal=mininmal)
     return pr
 
 
@@ -169,9 +168,11 @@ print('5', st.session_state['df_target'])
 print('6', st.session_state['columns_to_remove'])
 print('7', st.session_state['columns_to_add_back'])
 
-st.write('''
-# predict.in
+# with st.expander('Show session state variables'):
+#     st.write(f"{st.session_state}")
 
+st.write('''
+# predict.in  
 Get to know your dataset!
 ''')
 
@@ -187,10 +188,19 @@ def on_uploaded_file_change():
     st.session_state['columns_to_add_back'] = []
 
 
-with st.sidebar.header('Upload your data'):
-    uploaded_file = st.sidebar.file_uploader("Upload your input CSV file",
+with st.sidebar.header('Select data'):
+    if st.sidebar.checkbox("Use example dataset"):
+        uploaded_file = st.sidebar.selectbox('Select dataset:',
+                                             options=['Dataset/titanic.csv',
+                                                      'Dataset/home_data.csv'
+                                                      ],
+                                             on_change=on_uploaded_file_change
+                                             )
+    else:
+        uploaded_file = st.sidebar.file_uploader("Upload your input CSV file",
                                              type=["csv"],
                                              on_change=on_uploaded_file_change)
+
 
 if uploaded_file is None:
     st.info('Awaiting for CSV file to be uploaded.')
@@ -275,10 +285,11 @@ else:
 
     st.write('---')
 
+    mininmal_eda = st.checkbox('Minimal EDA')
     if st.checkbox('Genrate EDA'):
-        pr = eda(df)
+        pr = eda(df, False, mininmal_eda)
         st.header('**Profiling Report**')
-        # st_profile_report(pr)
+        st_profile_report(pr)
 
         desc = pr.get_description()
 
@@ -313,16 +324,20 @@ else:
             for i, item in enumerate(alerts_list):
                 if item.alert_type_name in {'Missing', 'Zeros'}:
                     st.markdown(f"- {item}")
-                    if st.checkbox(f'Fix {item.column_name} column'):
-                        if st.button('Delete entire column'):
-                            st.write(f'Deleted {item.column_name}')
-                        if st.button('Delete rows where values are missing'):
-                            st.write(f'Deleted rows with missing values in {item.column_name} column')
-                        if st.button('Fill missing values'):
-                            if st.button('Fill with mean value'):
-                                st.write(f'Filled missing values in {item.column_name} with its mean value{23}')
-                            if st.button('Fill with median value'):
-                                st.write(f'Filled missing values in {item.column_name} with its median value{21}')
+                    col1, col2 = st.columns([1, 3])
+                    if col1.checkbox(f'Fix {item.column_name} column'):
+                        if col2.button('Delete entire column', key=f'delete entire {item.column_name} button'):
+                            col2.success(f'Deleted {item.column_name}')
+                        if col2.button('Delete rows where values are missing', key=f'delete {item.column_name} button'):
+                            col2.success(f'Deleted rows with missing values in {item.column_name} column')
+                        if col2.button('Fill missing values', key=f'fill {item.column_name} button'):
+                            value = None
+                            if col2.button('Fill with mean value', key=f'fill mean {item.column_name} button'):
+                                value = 12
+                            if col2.button('Fill with median value', key=f'fill median {item.column_name} button'):
+                                value = 9
+                            if value is not None:
+                                col2.success(f'Filled missing values in {item.column_name} with {value}')
                     else:
                         st.warning('Column with missing value found.')
 
