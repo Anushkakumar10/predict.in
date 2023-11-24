@@ -16,11 +16,8 @@ st.set_page_config(page_title='predict.in',
                    layout='wide',
                    initial_sidebar_state='expanded',
                    menu_items={
-                       'Report a bug': "mailto:arnav.vatsal2213@gmail.com",
                        'About': '''# Welcome to predict.in
-Create predictive models using AI. Upload a dataset and leave the rest to us. You are in good hands.
-\nDeveloped with ❤️ by **Arnav**.
-\nhttps://github.com/arnav003
+Create predictive models using AI. Upload a dataset and leave the rest to us.
 '''
                    }
                    )
@@ -198,9 +195,8 @@ with st.sidebar.header('Select data'):
                                              )
     else:
         uploaded_file = st.sidebar.file_uploader("Upload your input CSV file",
-                                             type=["csv"],
-                                             on_change=on_uploaded_file_change)
-
+                                                 type=["csv"],
+                                                 on_change=on_uploaded_file_change)
 
 if uploaded_file is None:
     st.info('Awaiting for CSV file to be uploaded.')
